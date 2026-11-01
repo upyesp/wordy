@@ -1,0 +1,6 @@
+# pnpm settings live here since pnpm 12 (the package.json "pnpm" field is no longer read).
+# allowBuilds replaces onlyBuiltDependencies; `pnpm approve <pkg>` writes here.
+# esbuild's postinstall places its platform binary. pixi.js's unapproved `prepare`
+# (husky, dev-repo only) is deliberately left out.
+allowBuilds:
+  esbuild: true
