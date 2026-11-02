@@ -70,6 +70,11 @@ export class Board {
     }
   }
 
+  /** The trace's letters in visit order (GLOSSARY: trace). */
+  currentWord(): string {
+    return this.trace.map((t) => t.letter).join('');
+  }
+
   private updatePointer(gx: number, gy: number): void {
     const p = this.view.toLocal({ x: gx, y: gy });
     const hit = tileAt(this.tileSize, p.x, p.y);

@@ -1,6 +1,8 @@
 import { Application, Text, type FederatedPointerEvent } from 'pixi.js';
 import { Board } from './Board';
-import { boardSize } from './hex';
+import { boardBounds } from './hex';
+import { Scoreboard } from './Scoreboard';
+import { Score, type WordStatus } from './score';
 import { TraceStrip } from './TraceStrip';
 import { FONT, THEME } from './theme';
 
@@ -8,8 +10,7 @@ import { FONT, THEME } from './theme';
 const STAGE_W = 390;
 const STAGE_H = 844;
 const TILE_SIZE = 32;
-const STRIP_Y = 96;
-const BOARD_TOP_GAP = 150;
+const BOARD_TOP_GAP = 170;
 
 async function boot(): Promise<void> {
   const app = new Application();
@@ -22,25 +23,41 @@ async function boot(): Promise<void> {
     resolution: window.devicePixelRatio,
     autoDensity: true,
   });
+  // The fixed logical stage is ours to letterbox — pixi's window-following
+  // resize must never stretch it (it fights fit() when phone UI chrome resizes).
+  (app as unknown as { resizeTo: unknown }).resizeTo = null;
   document.querySelector('#app')!.appendChild(app.canvas);
 
+  const dictionary: Promise<Set<string>> = fetch(`${import.meta.env.BASE_URL}words.txt`)
+    .then((r) => {
+      if (!r.ok) throw new Error(`words.txt ${r.status}`);
+      return r.text();
+    })
+    .then((t) => new Set(t.split('\n').filter((w) => w.length > 0)));
+
+  const scoreboard = new Scoreboard();
+  app.stage.addChild(scoreboard.view);
+
   const strip = new TraceStrip();
-  strip.view.position.set(STAGE_W / 2, STRIP_Y);
+  strip.view.position.set(STAGE_W / 2, 140);
   app.stage.addChild(strip.view);
 
   const board = new Board(TILE_SIZE, {
     onSlideStart: () => {
       hint.visible = false;
+      slideToken += 1;
       strip.reset();
     },
     onTileJoin: (letter) => {
       strip.append(letter);
     },
   });
-  const { width: boardW, height: boardH } = boardSize(TILE_SIZE);
+  // Centre the DRAWN box, not the layout box: hexes overhang the outer tile
+  // centres, so boardBounds carries the overhang offsets (feedback round 1).
+  const bounds = boardBounds(TILE_SIZE);
   board.view.position.set(
-    (STAGE_W - boardW) / 2,
-    BOARD_TOP_GAP + (STAGE_H - BOARD_TOP_GAP - boardH) / 2,
+    (STAGE_W - bounds.width) / 2 - bounds.offsetX,
+    BOARD_TOP_GAP + (STAGE_H - BOARD_TOP_GAP - bounds.height) / 2 - bounds.offsetY,
   );
   app.stage.addChild(board.view);
 
@@ -58,6 +75,22 @@ async function boot(): Promise<void> {
   hint.position.set(STAGE_W / 2, STAGE_H - 48);
   app.stage.addChild(hint);
 
+  let score: Score | null = null;
+  let slideToken = 0;
+
+  async function evaluateSlide(): Promise<void> {
+    const token = slideToken;
+    const word = board.currentWord();
+    if (word.length === 0) return;
+    const dict = await dictionary;
+    score ??= new Score(dict);
+    if (token !== slideToken) return; // a new slide began while we loaded
+    const result = score.submit(word);
+    strip.markResult(result.status, result.points);
+    scoreboard.update(score.score, score.words, score.best);
+    if (result.status === 'new') scoreboard.flash();
+  }
+
   let activePointer: number | null = null;
   app.stage.eventMode = 'static';
   app.stage.hitArea = app.screen;
@@ -74,6 +107,7 @@ async function boot(): Promise<void> {
     if (e.pointerId !== activePointer) return;
     activePointer = null;
     board.release();
+    void evaluateSlide();
   };
   app.stage.on('pointerup', end);
   app.stage.on('pointerupoutside', end);
@@ -83,16 +117,26 @@ async function boot(): Promise<void> {
     const scale = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
     app.canvas.style.width = `${Math.floor(STAGE_W * scale)}px`;
     app.canvas.style.height = `${Math.floor(STAGE_H * scale)}px`;
-    app.renderer.resize(STAGE_W, STAGE_H, Math.min(window.devicePixelRatio * scale, 3));
+    const res = Math.min(Math.max(window.devicePixelRatio * scale, 1), 3);
+    app.renderer.resize(STAGE_W, STAGE_H, res);
   };
   window.addEventListener('resize', fit);
+  window.addEventListener('orientationchange', fit);
+  window.visualViewport?.addEventListener('resize', fit);
   fit();
 
   app.ticker.add((ticker) => {
     const dt = Math.min(ticker.deltaMS / 1000, 1 / 30);
     board.step(dt);
     strip.step(dt);
+    scoreboard.step(dt);
   });
+
+  if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {
+      /* offline support is progressive — ignore failures */
+    });
+  }
 }
 
 void boot();

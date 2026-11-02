@@ -17,6 +17,13 @@ export interface Size {
   height: number;
 }
 
+export interface BoardBounds extends Size {
+  /** Leftmost drawn point relative to the col-0 centre (hexes overhang left). */
+  offsetX: number;
+  /** Topmost drawn point relative to the row-0 centre (hexes overhang up). */
+  offsetY: number;
+}
+
 export function tileCenter(row: number, col: number, s: number): TilePos {
   return {
     x: SQRT3 * s * (col + (row % 2 === 1 ? 0.5 : 0)),
@@ -34,8 +41,19 @@ export function hexVertices(s: number): number[] {
   return pts;
 }
 
-export function boardSize(s: number): Size {
-  return { width: SQRT3 * s * (COLS + 0.5), height: 1.5 * s * (ROWS - 1) + 2 * s };
+/**
+ * Drawn bounds of the whole board. Position the board container at
+ * `((stageW - width) / 2 - offsetX, regionTop + (regionH - height) / 2 - offsetY)`
+ * to centre the *drawn* box — the layout box alone is off-centre because hexes
+ * overhang the outer centres by half a width (x) and a full radius (y).
+ */
+export function boardBounds(s: number): BoardBounds {
+  return {
+    width: SQRT3 * s * (COLS + 0.5),
+    height: 1.5 * s * (ROWS - 1) + 2 * s,
+    offsetX: (-SQRT3 / 2) * s,
+    offsetY: -s,
+  };
 }
 
 /** Pixel → tile via axial cube-rounding (odd-r offset layout), or null off-board. */

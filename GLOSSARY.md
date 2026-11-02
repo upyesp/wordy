@@ -1,6 +1,6 @@
 # wordy
 
-A finger-slide word puzzle played on a honeycomb of tiles. This prototype phase exists to prove the tactile feel of the board — sliding and dipping — before any game rules exist. There is currently no word validation: a slide produces a **trace**, not a word.
+A finger-slide word puzzle played on a honeycomb of tiles. The prototype phase proved the tactile feel — sliding and dipping — and the board now keeps score: traces of three or more tiles that form real words earn points.
 
 ## Language
 
@@ -30,12 +30,24 @@ _Avoid_: press-down, tilt, squash
 
 **Trace**:
 The ordered sequence of distinct tiles visited during one slide.
-_Avoid_: path, word (word is reserved for when game rules arrive)
+_Avoid_: path
 
 **Selected**:
 The persistent marked (tinted) state a tile holds for the rest of a slide once it has joined the trace.
 _Avoid_: visited, active, locked
 
 **Trace strip**:
-The display above the board echoing the trace's letters in visit order.
+The display above the board echoing the trace's letters in visit order, recoloured once the word is judged.
 _Avoid_: word bar, guess display
+
+**Word**:
+A trace of at least three tiles whose letters, read in visit order, form a dictionary word. Only words score.
+_Avoid_: guess, entry
+
+**Score**:
+The player's accumulated points. A word of n tiles earns points that grow quadratically with n; each distinct word scores once per session.
+_Avoid_: points (in prose), total
+
+**Best**:
+The highest Score reached in any session on this device; remembered between visits.
+_Avoid_: high score, record

@@ -14,7 +14,12 @@ pnpm dev        # local dev server
 pnpm build      # typecheck + production build to dist/
 ```
 
-PixiJS 8 + Vite + TypeScript. Mouse input works on desktop; the portrait stage letterboxes.
+PixiJS 8 + Vite + TypeScript. Installable PWA (manifest + service worker, offline-capable); mouse input works on desktop; the portrait stage letterboxes.
+
+## Game
+
+- Slide across tiles to form a trace; on release, words of **3+ letters** found in the dictionary score `10·(length−2)²` points; repeats score nothing. **BEST** persists in `localStorage`.
+- Dictionary: 148,736 English words (3–8 letters) from [dwyl/english-words](https://github.com/dwyl/english-words), served as `public/words.txt`.
 
 ## Design decisions
 

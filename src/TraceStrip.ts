@@ -1,29 +1,31 @@
-import { Container, Graphics, Text } from 'pixi.js';
+import { Container, Text } from 'pixi.js';
 import { FONT, THEME } from './theme';
 
 const MAX_LETTERS = 12;
 const SLOT = 26;
-const UNDERLINE_WIDTH = 320;
+
+export type WordStatus = 'new' | 'dup' | 'invalid' | 'short';
+
+interface Popup {
+  text: Text;
+  age: number;
+}
 
 /**
  * The trace strip (GLOSSARY): echoes the trace's letters in visit order and
- * persists after release until the next slide begins (Round 2, Q3).
+ * persists after release until the next slide begins (Round 2, Q3). Result
+ * marking recolours the held word — no underlines or bars, ever.
  */
 export class TraceStrip {
   readonly view = new Container();
   private letters: Text[] = [];
+  private pops: Popup[] = [];
 
-  constructor() {
-    const underline = new Graphics();
-    underline.rect(-UNDERLINE_WIDTH / 2, 20, UNDERLINE_WIDTH, 1.5);
-    underline.fill({ color: THEME.stripDim, alpha: 0.45 });
-    this.view.addChild(underline);
-  }
-
-  /** Clears for a new slide (called on every press). */
   reset(): void {
     for (const t of this.letters) t.destroy();
     this.letters = [];
+    for (const p of this.pops) p.text.destroy();
+    this.pops = [];
   }
 
   append(letter: string): void {
@@ -38,6 +40,7 @@ export class TraceStrip {
     });
     t.anchor.set(0.5);
     t.scale.set(0.4);
+    t.alpha = 1;
     this.letters.push(t);
     this.view.addChild(t);
     if (this.letters.length > MAX_LETTERS) {
@@ -46,10 +49,54 @@ export class TraceStrip {
     this.layout();
   }
 
+  /** Recolour the held word once the word has been judged. */
+  markResult(status: WordStatus, points: number): void {
+    for (const t of this.letters) {
+      if (status === 'new') {
+        t.style.fill = THEME.ember;
+        t.scale.set(1.18);
+      } else if (status === 'dup') {
+        t.alpha = 0.45;
+      } else {
+        t.style.fill = THEME.stripDim;
+        t.alpha = 0.6;
+      }
+    }
+    if (status === 'new') {
+      const popup = new Text({
+        text: `+${points}`,
+        style: {
+          fontFamily: FONT,
+          fontSize: 24,
+          fontWeight: '800',
+          fill: THEME.ember,
+        },
+      });
+      popup.anchor.set(0);
+      const right = this.letters.length
+        ? this.letters[this.letters.length - 1]!.x + SLOT * 1.5
+        : 0;
+      popup.position.set(right, -6);
+      this.pops.push({ text: popup, age: 0 });
+      this.view.addChild(popup);
+    }
+  }
+
   step(dt: number): void {
     for (const t of this.letters) {
-      if (t.scale.x < 0.995) {
-        t.scale.set(t.scale.x + (1 - t.scale.x) * Math.min(1, dt * 14));
+      const s = t.scale.x;
+      if (Math.abs(s - 1) > 0.004) {
+        t.scale.set(s + (1 - s) * Math.min(1, dt * 10));
+      }
+    }
+    for (let i = this.pops.length - 1; i >= 0; i--) {
+      const p = this.pops[i]!;
+      p.age += dt;
+      p.text.y = -6 - p.age * 26;
+      p.text.alpha = Math.max(0, 1 - p.age / 0.9);
+      if (p.age >= 0.9) {
+        p.text.destroy();
+        this.pops.splice(i, 1);
       }
     }
   }

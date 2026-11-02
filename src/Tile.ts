@@ -7,10 +7,10 @@ const DIP_SCALE = 0.1;
 const LETTER_FONT_SIZE_RATIO = 0.82;
 
 /**
- * One honeycomb tile: drop shadow, hex face with bevel edges, directional dip
- * shading (ADR-0001 level b), and the letter riding the surface.
- * All state changes go through step()/redraw() so the retained Graphics are
- * only rebuilt when the visible values actually moved.
+ * One honeycomb tile. The resting surface is deliberately direction-neutral
+ * (uniform rim, radial face, soft centred shadow) — connections can be made in
+ * any direction, so nothing on the tile may suggest one. Directional shading
+ * appears only while a dip is actively following the finger (ADR-0001).
  */
 export class Tile {
   readonly view = new Container();
@@ -26,6 +26,7 @@ export class Tile {
 
   private readonly size: number;
   private readonly vertices: number[];
+  private readonly faceVertices: number[];
   private readonly shadowG: Graphics;
   private readonly baseG: Graphics;
   private readonly sheenG: Graphics;
@@ -41,13 +42,10 @@ export class Tile {
     this.letter = letter;
     this.size = size;
     this.vertices = hexVertices(size);
+    this.faceVertices = hexVertices(size * 0.9);
 
     this.shadowG = new Graphics();
-    this.shadowG.poly(this.vertices);
-    this.shadowG.fill({ color: THEME.shadow, alpha: 1 });
-
     this.baseG = new Graphics();
-
     this.sheenG = new Graphics();
 
     this.letterT = new Text({
@@ -107,39 +105,33 @@ export class Tile {
 
     this.view.scale.set(1 - DIP_SCALE * dip);
 
-    // Drop shadow tightens and shifts under the press.
-    this.shadowG.position.set(
-      -this.leanX * s * 0.09,
-      s * 0.15 - this.leanY * s * 0.09 - dip * s * 0.06,
-    );
-    this.shadowG.alpha = 0.3 + 0.14 * dip;
-    this.shadowG.scale.set(1 + 0.04 * dip);
+    // Soft centred depth shadow: concentric, not offset — no direction cue.
+    this.shadowG.clear();
+    this.shadowG.poly(this.vertices);
+    this.shadowG.scale.set(1.12 - 0.06 * dip);
+    this.shadowG.fill({ color: THEME.shadow, alpha: 0.1 + 0.06 * dip });
+    this.shadowG.poly(this.vertices);
+    this.shadowG.scale.set(1.05 - 0.03 * dip);
+    this.shadowG.fill({ color: THEME.shadow, alpha: 0.18 + 0.08 * dip });
 
-    // Face: darken into the press, warm toward ember while selected.
-    let fill = lerpColor(THEME.tile, THEME.tilePressed, 0.55 * dip);
-    fill = lerpColor(fill, THEME.ember, 0.5 * sel);
+    // Face: uniform dark rim, radial amber centre, no edge bias.
+    let face = lerpColor(THEME.tile, THEME.tilePressed, 0.55 * dip);
+    face = lerpColor(face, THEME.ember, 0.5 * sel);
+    const rim = lerpColor(THEME.edgeDark, face, 0.25);
 
     this.baseG.clear();
     this.baseG.poly(this.vertices);
-    this.baseG.fill({ color: fill });
-
-    // Static bevel: light catches the top edges, shade pools on the bottom.
-    const v = this.vertices;
-    this.baseG.poly([v[10]!, v[11]!, v[0]!, v[1]!, v[2]!, v[3]!]);
+    this.baseG.fill({ color: rim });
+    this.baseG.poly(this.faceVertices);
+    this.baseG.fill({ color: face });
+    this.baseG.circle(0, 0, s * 0.52);
+    this.baseG.fill({ color: THEME.edgeLight, alpha: 0.16 - 0.1 * dip });
+    this.baseG.poly(this.faceVertices);
     this.baseG.stroke({
-      width: s * 0.1,
+      width: s * 0.05,
       color: THEME.edgeLight,
-      alpha: 0.85 - 0.4 * dip,
+      alpha: 0.3 - 0.15 * dip,
       join: 'round',
-      cap: 'round',
-    });
-    this.baseG.poly([v[4]!, v[5]!, v[6]!, v[7]!, v[8]!, v[9]!]);
-    this.baseG.stroke({
-      width: s * 0.1,
-      color: THEME.edgeDark,
-      alpha: 0.9 - 0.5 * dip,
-      join: 'round',
-      cap: 'round',
     });
 
     if (sel > 0.01) {
@@ -152,8 +144,8 @@ export class Tile {
       });
     }
 
-    // Directional dip shading (ADR-0001): shadow pools toward the finger,
-    // light rims the far side.
+    // Directional shading exists only while the finger is actively pressing
+    // (ADR-0001): shadow pools toward the finger, light rims the far side.
     this.sheenG.clear();
     if (dip > 0.01) {
       const off = s * 0.22;
