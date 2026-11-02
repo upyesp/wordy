@@ -19,7 +19,9 @@ PixiJS 8 + Vite + TypeScript. Installable PWA (manifest + service worker, offlin
 ## Game
 
 - Slide across tiles to form a trace; on release, words of **3+ letters** found in the dictionary score `10·(length−2)²` points; repeats score nothing. **BEST** persists in `localStorage`.
-- Dictionary: 148,736 English words (3–8 letters) from [dwyl/english-words](https://github.com/dwyl/english-words), served as `public/words.txt`.
+- **Every game deals a fresh board**: a couple of common words land on straight rows (forward or backward), most are laid along winding self-avoiding paths that interlock crossword-style, the rest fills with frequency-weighted letters, and the result is quality-gated (a capped DFS must find enough dictionary words, or generation retries).
+- Controls live in the ☰ menu (top-right): **Sound**, **Theme** (light/dark, persisted), **New game**. The top 56pt of the stage are kept clear for the iOS status bar/notch.
+- Dictionary: 148,736 English words (3–8 letters) from [dwyl/english-words](https://github.com/dwyl/english-words) for validation; 4,622 common words (google-10000, no swears) for board placement. Sound is a tiny Web Audio synth — no assets.
 
 ## Design decisions
 

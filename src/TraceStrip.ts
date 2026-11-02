@@ -20,12 +20,14 @@ export class TraceStrip {
   readonly view = new Container();
   private letters: Text[] = [];
   private pops: Popup[] = [];
+  private lastStatus: WordStatus | null = null;
 
   reset(): void {
     for (const t of this.letters) t.destroy();
     this.letters = [];
     for (const p of this.pops) p.text.destroy();
     this.pops = [];
+    this.lastStatus = null;
   }
 
   append(letter: string): void {
@@ -51,17 +53,8 @@ export class TraceStrip {
 
   /** Recolour the held word once the word has been judged. */
   markResult(status: WordStatus, points: number): void {
-    for (const t of this.letters) {
-      if (status === 'new') {
-        t.style.fill = THEME.ember;
-        t.scale.set(1.18);
-      } else if (status === 'dup') {
-        t.alpha = 0.45;
-      } else {
-        t.style.fill = THEME.stripDim;
-        t.alpha = 0.6;
-      }
-    }
+    this.lastStatus = status;
+    this.applyStatus();
     if (status === 'new') {
       const popup = new Text({
         text: `+${points}`,
@@ -79,6 +72,34 @@ export class TraceStrip {
       popup.position.set(right, -6);
       this.pops.push({ text: popup, age: 0 });
       this.view.addChild(popup);
+    }
+  }
+
+  /** Re-apply the held result colours after a palette swap. */
+  refreshTheme(): void {
+    this.applyStatus();
+  }
+
+  private applyStatus(): void {
+    for (const t of this.letters) {
+      switch (this.lastStatus) {
+        case 'new':
+          t.style.fill = THEME.ember;
+          t.alpha = 1;
+          break;
+        case 'dup':
+          t.style.fill = THEME.stripInk;
+          t.alpha = 0.45;
+          break;
+        case 'invalid':
+        case 'short':
+          t.style.fill = THEME.stripDim;
+          t.alpha = 0.6;
+          break;
+        default:
+          t.style.fill = THEME.stripInk;
+          t.alpha = 1;
+      }
     }
   }
 

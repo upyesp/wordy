@@ -171,6 +171,14 @@ export class Tile {
     this.letterT.position.set(this.leanX * s * 0.15, this.leanY * s * 0.15);
   }
 
+  forceRedraw(): void {
+    this.lastDip = -1;
+    this.lastSelected = -1;
+    this.lastLeanX = -1;
+    this.lastLeanY = -1;
+    this.redraw();
+  }
+
   private translated(dx: number, dy: number): number[] {
     const out: number[] = [];
     for (let i = 0; i < 6; i++) {

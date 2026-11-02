@@ -13,6 +13,7 @@ export class Scoreboard {
   private readonly scoreT: Text;
   private readonly wordsT: Text;
   private readonly bestT: Text;
+  private readonly labels: Text[] = [];
   private lastPulseFill = -1;
 
   constructor() {
@@ -29,6 +30,7 @@ export class Scoreboard {
       });
       label.anchor.set(0.5);
       label.position.set(x, 34);
+      this.labels.push(label);
       this.view.addChild(label);
       const value = new Text({
         text: '0',
@@ -72,6 +74,13 @@ export class Scoreboard {
     this.pulse = 1;
   }
 
+  refreshTheme(): void {
+    for (const label of this.labels) label.style.fill = THEME.stripDim;
+    this.wordsT.style.fill = THEME.stripInk;
+    this.bestT.style.fill = THEME.stripInk;
+    this.lastPulseFill = -1;
+  }
+
   step(dt: number): void {
     this.shownScore += (this.targetScore - this.shownScore) * Math.min(1, dt * 7);
     if (Math.abs(this.targetScore - this.shownScore) < 0.5) {
@@ -90,6 +99,8 @@ export class Scoreboard {
         this.lastPulseFill = fill;
         this.scoreT.style.fill = fill;
       }
+    } else if (this.scoreT.style.fill !== THEME.stripInk) {
+      this.scoreT.style.fill = THEME.stripInk;
     }
   }
 }
