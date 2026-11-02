@@ -21,6 +21,7 @@ export class TraceStrip {
   private letters: Text[] = [];
   private pops: Popup[] = [];
   private lastStatus: WordStatus | null = null;
+  private hintMode = false;
 
   reset(): void {
     for (const t of this.letters) t.destroy();
@@ -28,9 +29,23 @@ export class TraceStrip {
     for (const p of this.pops) p.text.destroy();
     this.pops = [];
     this.lastStatus = null;
+    this.hintMode = false;
+  }
+
+  /**
+   * A slide is starting. A judged word is cleared straight away, but a hint
+   * word stays visible until the first tile actually joins the new trace.
+   */
+  beginSlide(): void {
+    if (!this.hintMode) this.reset();
   }
 
   append(letter: string): void {
+    if (this.hintMode) this.reset();
+    this.addLetter(letter);
+  }
+
+  private addLetter(letter: string): void {
     const t = new Text({
       text: letter,
       style: {
@@ -53,6 +68,7 @@ export class TraceStrip {
 
   /** Recolour the held word once the word has been judged. */
   markResult(status: WordStatus, points: number): void {
+    this.hintMode = false;
     this.lastStatus = status;
     this.applyStatus();
     if (status === 'new') {
@@ -75,12 +91,27 @@ export class TraceStrip {
     }
   }
 
+  /** Echo a hint word (dim ember) until the next slide's first tile. */
+  showHint(word: string): void {
+    this.reset();
+    for (const letter of word) this.addLetter(letter);
+    this.hintMode = true;
+    this.applyStatus();
+  }
+
   /** Re-apply the held result colours after a palette swap. */
   refreshTheme(): void {
     this.applyStatus();
   }
 
   private applyStatus(): void {
+    if (this.hintMode) {
+      for (const t of this.letters) {
+        t.style.fill = THEME.ember;
+        t.alpha = 0.55;
+      }
+      return;
+    }
     for (const t of this.letters) {
       switch (this.lastStatus) {
         case 'new':

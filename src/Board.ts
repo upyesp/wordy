@@ -24,6 +24,10 @@ export class Board {
   private trace: Tile[] = [];
   private readonly inTrace = new Set<Tile>();
   private hoveredKey: number | null = null;
+  private letters: string[] = [];
+  private hintPath: number[] = [];
+  private hintIndex = 0;
+  private hintClock = 0;
 
   constructor(tileSize: number, letters: string[][], cb: BoardCallbacks) {
     this.tileSize = tileSize;
@@ -45,11 +49,38 @@ export class Board {
       tile.step(dt);
       tile.redraw();
     }
+    // Hint flash: one tile every 120ms, first one already lit in showHint().
+    if (this.hintIndex < this.hintPath.length) {
+      this.hintClock += dt;
+      while (this.hintIndex < this.hintPath.length && this.hintClock >= 0.12) {
+        this.hintClock -= 0.12;
+        const key = this.hintPath[this.hintIndex];
+        if (key !== undefined) this.byIndex.get(key)?.flashHint();
+        this.hintIndex += 1;
+      }
+    }
   }
 
   /** The trace's letters in visit order (GLOSSARY: trace). */
   currentWord(): string {
     return this.trace.map((t) => t.letter).join('');
+  }
+
+  /** Row-major letters, for finding a hint word (letters.ts). */
+  gridLetters(): readonly string[] {
+    return this.letters;
+  }
+
+  /** Flash a path in reading order, so a hint shows both the word and its route. */
+  showHint(path: readonly number[]): void {
+    this.hintPath = [...path];
+    this.hintIndex = 0;
+    this.hintClock = 0;
+    const first = this.hintPath[0];
+    if (first !== undefined) {
+      this.byIndex.get(first)?.flashHint();
+      this.hintIndex = 1;
+    }
   }
 
   private build(letters: string[][]): void {
@@ -62,6 +93,10 @@ export class Board {
     this.inTrace.clear();
     this.hoveredKey = null;
     this.pressing = false;
+    this.letters = letters.flat();
+    this.hintPath = [];
+    this.hintIndex = 0;
+    this.hintClock = 0;
     for (let row = 0; row < ROWS; row++) {
       for (let col = 0; col < COLS; col++) {
         const tile = new Tile(row, col, letters[row]![col]!, this.tileSize);
@@ -76,6 +111,7 @@ export class Board {
 
   press(gx: number, gy: number): void {
     this.pressing = true;
+    this.hintPath = [];
     for (const tile of this.trace) tile.setSelected(false);
     this.trace = [];
     this.inTrace.clear();

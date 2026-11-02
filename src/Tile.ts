@@ -23,6 +23,7 @@ export class Tile {
   private selectedTarget = 0;
   private leanX = 0;
   private leanY = 0;
+  private hint = 0;
 
   private readonly size: number;
   private readonly vertices: number[];
@@ -35,6 +36,7 @@ export class Tile {
   private lastSelected = -1;
   private lastLeanX = -1;
   private lastLeanY = -1;
+  private lastHint = -1;
 
   constructor(row: number, col: number, letter: string, size: number) {
     this.row = row;
@@ -76,6 +78,11 @@ export class Tile {
     this.selectedTarget = on ? 1 : 0;
   }
 
+  /** A hint is pointing at this tile: a brief ember outline, then fade. */
+  flashHint(): void {
+    this.hint = 1;
+  }
+
   step(dt: number): void {
     this.dip.step(dt);
     if (this.dip.atRest()) {
@@ -83,16 +90,19 @@ export class Tile {
       this.dip.velocity = 0;
     }
     this.selected += (this.selectedTarget - this.selected) * Math.min(1, dt * 12);
+    if (this.hint > 0) this.hint = Math.max(0, this.hint - dt * 1.4);
   }
 
   redraw(): void {
     const dip = clamp01(this.dip.value);
     const sel = this.selected;
+    const hintMoved = Math.abs(this.hint - this.lastHint) > 0.001;
     if (
       Math.abs(dip - this.lastDip) < 0.002 &&
       Math.abs(sel - this.lastSelected) < 0.002 &&
       Math.abs(this.leanX - this.lastLeanX) < 0.004 &&
-      Math.abs(this.leanY - this.lastLeanY) < 0.004
+      Math.abs(this.leanY - this.lastLeanY) < 0.004 &&
+      !hintMoved
     ) {
       return;
     }
@@ -100,6 +110,7 @@ export class Tile {
     this.lastSelected = sel;
     this.lastLeanX = this.leanX;
     this.lastLeanY = this.leanY;
+    this.lastHint = this.hint;
 
     const s = this.size;
 
@@ -144,6 +155,24 @@ export class Tile {
       });
     }
 
+    // Hint: a glowing outline that pulses once as the hint path is revealed.
+    if (this.hint > 0.01) {
+      this.baseG.poly(this.vertices);
+      this.baseG.stroke({
+        width: s * 0.16,
+        color: THEME.ember,
+        alpha: 0.26 * this.hint,
+        join: 'round',
+      });
+      this.baseG.poly(this.vertices);
+      this.baseG.stroke({
+        width: s * 0.07,
+        color: THEME.ember,
+        alpha: 0.95 * this.hint,
+        join: 'round',
+      });
+    }
+
     // Directional shading exists only while the finger is actively pressing
     // (ADR-0001): shadow pools toward the finger, light rims the far side.
     this.sheenG.clear();
@@ -176,6 +205,7 @@ export class Tile {
     this.lastSelected = -1;
     this.lastLeanX = -1;
     this.lastLeanY = -1;
+    this.lastHint = -1;
     this.redraw();
   }
 

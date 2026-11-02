@@ -51,3 +51,19 @@ _Avoid_: points (in prose), total
 **Best**:
 The highest Score reached in any session on this device; remembered between visits.
 _Avoid_: high score, record
+
+**Daily board**:
+The arrangement dealt from a seed fixed by the local calendar day, so it is the same board for everyone playing on that day.
+_Avoid_: puzzle, challenge, level
+
+**Streak**:
+The number of consecutive days on which at least one Word has been scored. Device-local, and counted only when play happens — opening the app is not enough.
+_Avoid_: combo, run
+
+**Hint**:
+A revealed, not-yet-found Word together with the route that spells it. A hint shows where a word is; it never scores by itself.
+_Avoid_: clue, reveal, cheat
+
+**Found words**:
+The review of the Words scored on the current board, newest first, with the points each earned.
+_Avoid_: word list, history, log

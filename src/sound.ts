@@ -49,4 +49,10 @@ export class Sound {
     this.tone(150, 0, 0.12, 'square', 0.05);
     this.tone(110, 0.09, 0.16, 'square', 0.05);
   }
+
+  /** Soft rising two-note chirp when a hint is revealed. */
+  hint(): void {
+    this.tone(783.99, 0, 0.12, 'triangle', 0.09);
+    this.tone(1046.5, 0.08, 0.16, 'triangle', 0.09);
+  }
 }

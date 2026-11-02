@@ -5,6 +5,12 @@ export interface Submission {
   points: number;
 }
 
+export interface FoundWord {
+  /** Display form (uppercase, as traced). */
+  word: string;
+  points: number;
+}
+
 /**
  * Session scoring: valid words score 10·(length−2)² points once each; the best
  * session score persists across visits (feedback round; minimum 3 letters).
@@ -14,6 +20,17 @@ export class Score {
   words = 0;
   best = 0;
   private readonly found = new Set<string>();
+  private readonly list: FoundWord[] = [];
+
+  /** Lowercase words already scored, in submission order. */
+  get foundSet(): ReadonlySet<string> {
+    return this.found;
+  }
+
+  /** Scored words with their points, in submission order (newest last). */
+  get foundWords(): readonly FoundWord[] {
+    return this.list;
+  }
 
   constructor(private readonly dictionary: Set<string>) {
     try {
@@ -30,6 +47,7 @@ export class Score {
     if (this.found.has(w)) return { status: 'dup', points: 0 };
     this.found.add(w);
     const points = 10 * (word.length - 2) ** 2;
+    this.list.push({ word: word.toUpperCase(), points });
     this.score += points;
     this.words += 1;
     if (this.score > this.best) {

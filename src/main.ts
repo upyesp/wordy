@@ -1,13 +1,15 @@
 import { Application, Text, type FederatedPointerEvent } from 'pixi.js';
 import { Board } from './Board';
+import { dailySeed, hasPlayedToday, markPlayed, mulberry32, streakNow } from './daily';
 import { boardBounds } from './hex';
-import { generateLetters } from './letters';
+import { findHint, generateLetters } from './letters';
 import { Menu } from './Menu';
 import { Scoreboard } from './Scoreboard';
 import { Score } from './score';
 import { Sound } from './sound';
 import { TraceStrip } from './TraceStrip';
 import { FONT, THEME, applyPalette, paletteFor, type ThemeName } from './theme';
+import { WordsPanel } from './WordsPanel';
 
 /** Strict portrait stage: letterboxed with bars on desktop, full-bleed on phones (Round 2, Q5). */
 const STAGE_W = 390;
@@ -18,6 +20,9 @@ const TILE_SIZE = 39;
 const SAFE_TOP = 56;
 const STRIP_Y = 190;
 const BOARD_TOP_GAP = 230;
+const HINTS_PER_BOARD = 3;
+/** Menu fade-out time (plus margin); a hint waits so its reveal is not hidden. */
+const MENU_CLOSE_MS = 240;
 
 function pref(key: string, fallback: string): string {
   try {
@@ -78,7 +83,7 @@ async function boot(): Promise<void> {
   strip.view.position.set(STAGE_W / 2, STRIP_Y);
   app.stage.addChild(strip.view);
 
-  const hint = new Text({
+  const hintLine = new Text({
     text: 'slide your finger across the honeycomb',
     style: {
       fontFamily: FONT,
@@ -88,9 +93,11 @@ async function boot(): Promise<void> {
       fill: THEME.stripDim,
     },
   });
-  hint.anchor.set(0.5);
-  hint.position.set(STAGE_W / 2, STAGE_H - 48);
-  app.stage.addChild(hint);
+  hintLine.anchor.set(0.5);
+  hintLine.position.set(STAGE_W / 2, STAGE_H - 48);
+  app.stage.addChild(hintLine);
+
+  const wordsPanel = new WordsPanel();
 
   const sound = new Sound();
   sound.muted = !soundOn;
@@ -100,30 +107,76 @@ async function boot(): Promise<void> {
   let board: Board | null = null;
   let dictionary: Set<string> = new Set();
   let common: string[] = [];
+  let hintsLeft = HINTS_PER_BOARD;
+  let dailyMode = true;
+  let streak = streakNow();
+  let streakRecorded = hasPlayedToday();
 
-  function newGame(): void {
+  /** Deal a board (daily or random) and start a fresh session on it. */
+  function startBoard(letters: string[][], daily: boolean): void {
     if (!board || !score) return;
     slideToken += 1;
+    dailyMode = daily;
     score = new Score(dictionary);
-    board.newGame(generateLetters(common, dictionary));
+    board.newGame(letters);
     strip.reset();
+    scoreboard.resetScore();
     scoreboard.update(0, 0, score.best);
+    scoreboard.setStreak(streak, dailyMode);
+    wordsPanel.close();
+    hintsLeft = HINTS_PER_BOARD;
+    menu.setHints(hintsLeft);
+  }
+
+  function newGame(): void {
+    startBoard(generateLetters(common, dictionary), false);
+  }
+
+  function dailyGame(): void {
+    startBoard(generateLetters(common, dictionary, mulberry32(dailySeed())), true);
+  }
+
+  function scheduleHint(): void {
+    sound.resume();
+    const token = slideToken;
+    window.setTimeout(() => {
+      if (token !== slideToken) return; // a slide or new board began meanwhile
+      revealHint();
+    }, MENU_CLOSE_MS);
+  }
+
+  function revealHint(): void {
+    if (!board || !score || hintsLeft <= 0) return;
+    const hint = findHint(board.gridLetters(), dictionary, score.foundSet);
+    if (!hint) {
+      sound.fail();
+      return;
+    }
+    hintsLeft -= 1;
+    menu.setHints(hintsLeft);
+    board.showHint(hint.path);
+    strip.showHint(hint.word);
+    hintLine.visible = false;
+    sound.hint();
   }
 
   function restyle(): void {
     app.renderer.background.color = THEME.backdrop;
     document.body.style.background = THEME.cssBackdrop;
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME.cssBackdrop);
-    hint.style.fill = THEME.stripDim;
+    hintLine.style.fill = THEME.stripDim;
     scoreboard.refreshTheme();
     strip.refreshTheme();
     board?.refreshTheme();
+    wordsPanel.refreshTheme();
     menu.refreshTheme();
   }
 
   const menu = new Menu({
+    onOpen: () => wordsPanel.close(),
     onSound: (on) => {
       sound.muted = !on;
+      if (on) sound.resume();
       setPref('wordy.sound', on ? '1' : '0');
     },
     onTheme: (light) => {
@@ -132,13 +185,21 @@ async function boot(): Promise<void> {
       setPref('wordy.theme', name);
       restyle();
     },
+    onHint: () => scheduleHint(),
     onNewGame: () => newGame(),
+    onDaily: () => dailyGame(),
   });
   menu.setSound(soundOn);
   menu.setThemeLight(themeName === 'light');
+  menu.setHints(hintsLeft);
   menu.button.position.set(STAGE_W - 42, SAFE_TOP + 30);
 
-  async function evaluateSlide(): Promise<void> {
+  scoreboard.onWordsTap = () => {
+    menu.close();
+    wordsPanel.show(score?.foundWords ?? []);
+  };
+
+  function evaluateSlide(): void {
     const token = slideToken;
     const word = board?.currentWord() ?? '';
     if (word.length === 0 || !score) return;
@@ -147,6 +208,11 @@ async function boot(): Promise<void> {
     strip.markResult(result.status, result.points);
     scoreboard.update(score.score, score.words, score.best);
     if (result.status === 'new') {
+      if (!streakRecorded) {
+        streakRecorded = true;
+        streak = markPlayed();
+      }
+      scoreboard.setStreak(streak, dailyMode);
       scoreboard.flash();
       sound.success();
     } else if (result.status === 'invalid' || result.status === 'short') {
@@ -172,7 +238,7 @@ async function boot(): Promise<void> {
     if (e.pointerId !== activePointer) return;
     activePointer = null;
     board?.release();
-    void evaluateSlide();
+    evaluateSlide();
   };
   app.stage.on('pointerup', end);
   app.stage.on('pointerupoutside', end);
@@ -198,19 +264,23 @@ async function boot(): Promise<void> {
     strip.step(dt);
     scoreboard.step(dt);
     menu.step(dt);
+    wordsPanel.step(dt);
   });
 
-  // Word lists land, then the first game begins on a fresh arrangement.
+  // Word lists land, then today's board begins (ADR-0004).
   const [dictSet, commonList] = await lists;
   dictionary = dictSet;
   common = commonList;
   score = new Score(dictionary);
   scoreboard.update(0, 0, score.best);
-  board = new Board(TILE_SIZE, generateLetters(common, dictionary), {
+  scoreboard.setStreak(streak, dailyMode);
+  menu.setHints(hintsLeft);
+
+  board = new Board(TILE_SIZE, generateLetters(common, dictionary, mulberry32(dailySeed())), {
     onSlideStart: () => {
-      hint.visible = false;
+      hintLine.visible = false;
       slideToken += 1;
-      strip.reset();
+      strip.beginSlide();
     },
     onTileJoin: (letter, index) => {
       strip.append(letter);
@@ -225,8 +295,8 @@ async function boot(): Promise<void> {
     BOARD_TOP_GAP + (STAGE_H - BOARD_TOP_GAP - bounds.height) / 2 - bounds.offsetY,
   );
   app.stage.addChild(board.view);
-  // Menu chrome sits above the board so its taps never reach the stage.
-  app.stage.addChild(menu.button, menu.layer);
+  // Overlays sit above the board; the menu sits above everything.
+  app.stage.addChild(wordsPanel.view, menu.button, menu.layer);
 
   if (import.meta.env.PROD && 'serviceWorker' in navigator) {
     navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {
@@ -236,11 +306,21 @@ async function boot(): Promise<void> {
 
   // Debug/e2e hooks (tiny, harmless in production).
   (window as unknown as Record<string, unknown>).__wordyNewGame = newGame;
+  (window as unknown as Record<string, unknown>).__wordyDaily = dailyGame;
+  (window as unknown as Record<string, unknown>).__wordyHint = () => revealHint();
   (window as unknown as Record<string, unknown>).__wordyLetters = () =>
     board?.tiles.map((t) => t.letter).join('') ?? '';
+  (window as unknown as Record<string, unknown>).__wordyWords = () =>
+    score?.foundWords.map((w) => w.word) ?? [];
   (window as unknown as Record<string, unknown>).__wordyDebug = () => ({
     ...menu.debugState,
     theme: document.body.style.background,
+    hints: hintsLeft,
+    daily: dailyMode,
+    streak,
+    playedToday: streakRecorded,
+    words: score?.foundWords.length ?? 0,
+    panel: wordsPanel.isOpen,
   });
 }
 

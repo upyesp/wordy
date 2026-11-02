@@ -1,20 +1,28 @@
-import { Container, Text } from 'pixi.js';
+import { Container, Rectangle, Text } from 'pixi.js';
 import { FONT, THEME, lerpColor } from './theme';
 
 /**
  * The big scoreboard (feedback round): SCORE huge and centred, WORDS and BEST
- * flanking. The score counts up with an ember flash on every accepted word.
+ * flanking. WORDS doubles as the tap target for the found-words review — a
+ * chevron appears once there is a word to review. The daily streak caption
+ * sits in the gap under the score (ADR-0004).
  */
 export class Scoreboard {
   readonly view = new Container();
+  /** Tapping the WORDS stat opens the found-words review. */
+  onWordsTap: (() => void) | null = null;
+
   private targetScore = 0;
   private shownScore = 0;
   private pulse = 0;
   private readonly scoreT: Text;
   private readonly wordsT: Text;
   private readonly bestT: Text;
+  private readonly streakT: Text;
+  private readonly chevron: Text;
   private readonly labels: Text[] = [];
   private lastPulseFill = -1;
+  private scoreSize = 64;
 
   constructor() {
     const stat = (labelText: string, x: number): Text => {
@@ -50,6 +58,15 @@ export class Scoreboard {
     this.wordsT = stat('WORDS', 88);
     this.bestT = stat('BEST', 302);
 
+    this.chevron = new Text({
+      text: '›',
+      style: { fontFamily: FONT, fontSize: 15, fontWeight: '700', fill: THEME.stripDim },
+    });
+    this.chevron.anchor.set(0.5);
+    this.chevron.position.set(122, 34);
+    this.chevron.alpha = 0;
+    this.view.addChild(this.chevron);
+
     this.scoreT = new Text({
       text: '0',
       style: {
@@ -62,22 +79,71 @@ export class Scoreboard {
     this.scoreT.anchor.set(0.5);
     this.scoreT.position.set(195, 60);
     this.view.addChild(this.scoreT);
+
+    this.streakT = new Text({
+      text: '',
+      style: {
+        fontFamily: FONT,
+        fontSize: 10,
+        fontWeight: '700',
+        letterSpacing: 2,
+        fill: THEME.ember,
+      },
+    });
+    this.streakT.anchor.set(0.5);
+    this.streakT.position.set(195, 104);
+    this.view.addChild(this.streakT);
+
+    // WORDS stat hit area: wider than the label so a thumb can find it.
+    const wordsHit = new Container();
+    wordsHit.eventMode = 'static';
+    wordsHit.hitArea = new Rectangle(36, 14, 104, 64);
+    wordsHit.on('pointerdown', (e) => {
+      e.stopPropagation();
+      this.onWordsTap?.();
+    });
+    this.view.addChild(wordsHit);
   }
 
   update(score: number, words: number, best: number): void {
     this.targetScore = score;
     this.wordsT.text = String(words);
     this.bestT.text = String(best);
+    this.chevron.alpha = words > 0 ? 1 : 0;
+  }
+
+  /** Daily-board marker and consecutive-day streak (ADR-0004). */
+  setStreak(streak: number, daily: boolean): void {
+    if (daily) {
+      this.streakT.text = streak > 0 ? `DAILY · STREAK ${streak}` : 'DAILY BOARD';
+    } else {
+      this.streakT.text = streak > 0 ? `STREAK ${streak}` : '';
+    }
   }
 
   flash(): void {
     this.pulse = 1;
   }
 
+  /** Fresh board: snap the score to zero instead of unwinding the count-up. */
+  resetScore(): void {
+    this.targetScore = 0;
+    this.shownScore = 0;
+    this.pulse = 0;
+    this.scoreT.text = '0';
+    this.scoreT.scale.set(1);
+    if (this.scoreSize !== 64) {
+      this.scoreSize = 64;
+      this.scoreT.style.fontSize = 64;
+    }
+  }
+
   refreshTheme(): void {
     for (const label of this.labels) label.style.fill = THEME.stripDim;
     this.wordsT.style.fill = THEME.stripInk;
     this.bestT.style.fill = THEME.stripInk;
+    this.streakT.style.fill = THEME.ember;
+    this.chevron.style.fill = THEME.stripDim;
     this.lastPulseFill = -1;
   }
 
@@ -87,8 +153,15 @@ export class Scoreboard {
       this.shownScore = this.targetScore;
     }
     const shown = Math.round(this.shownScore);
-    if (this.scoreT.text !== String(shown)) {
-      this.scoreT.text = String(shown);
+    const text = String(shown);
+    if (this.scoreT.text !== text) {
+      this.scoreT.text = text;
+      // Keep wide scores clear of the flanking WORDS/BEST stats.
+      const size = text.length >= 6 ? 38 : text.length === 5 ? 42 : text.length === 4 ? 50 : 64;
+      if (size !== this.scoreSize) {
+        this.scoreSize = size;
+        this.scoreT.style.fontSize = size;
+      }
     }
 
     if (this.pulse > 0) {

@@ -7,14 +7,20 @@ import { COLS, ROWS } from './hex';
  * walks that interlock crossword-style where letters coincide. Empty cells are
  * filled with frequency-weighted letters, then the board is quality-gated: a
  * capped depth-first search must find enough dictionary words, or we retry.
+ *
+ * The random source is injectable (ADR-0004): the daily board passes a seeded
+ * PRNG so the same day always deals the same board.
  */
 const CELLS = ROWS * COLS;
 const MAX_PATH = 6;
 const MIN_FINDABLE = 14;
 const MAX_ATTEMPTS = 30;
+const MAX_HINT_CANDIDATES = 60;
 
 /** English-frequency weighted fill (vowel-heavy), so accidental words happen. */
 const FILL = 'EEEEEEEAAAATTNNNIIIOOSSRRHHLLDDCUUMMWWYYFFGGPPBBVK';
+
+export type Rng = () => number;
 
 function neighborsOf(r: number, c: number): number[] {
   const odd = r % 2 === 1;
@@ -36,9 +42,9 @@ const NEIGHBORS: number[][] = Array.from({ length: CELLS }, (_, i) =>
   neighborsOf(Math.floor(i / COLS), i % COLS),
 );
 
-function shuffle<T>(arr: T[]): T[] {
+function shuffle<T>(arr: T[], rng: Rng): T[] {
   for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(rng() * (i + 1));
     const tmp = arr[i]!;
     arr[i] = arr[j]!;
     arr[j] = tmp;
@@ -46,9 +52,16 @@ function shuffle<T>(arr: T[]): T[] {
   return arr;
 }
 
-function pickWords(common: string[], count: number, minLen: number, maxLen: number): string[] {
+function pickWords(
+  common: string[],
+  count: number,
+  minLen: number,
+  maxLen: number,
+  rng: Rng,
+): string[] {
   const pool = shuffle(
     common.filter((w) => w.length >= minLen && w.length <= maxLen).map((w) => w.toUpperCase()),
+    rng,
   );
   const out: string[] = [];
   const seen = new Set<string>();
@@ -62,7 +75,7 @@ function pickWords(common: string[], count: number, minLen: number, maxLen: numb
 }
 
 /** Place `word` on a self-avoiding walk; cells may be reused only on letter match. */
-function tryWinding(grid: string[], word: string): boolean {
+function tryWinding(grid: string[], word: string, rng: Rng): boolean {
   for (let attempt = 0; attempt < 12; attempt++) {
     const path: number[] = [];
     const used = new Set<number>();
@@ -70,7 +83,7 @@ function tryWinding(grid: string[], word: string): boolean {
       path.push(cell);
       used.add(cell);
       if (path.length === word.length) return true;
-      for (const n of shuffle([...NEIGHBORS[cell]!])) {
+      for (const n of shuffle([...NEIGHBORS[cell]!], rng)) {
         if (used.has(n)) continue;
         const ch = grid[n];
         if (ch !== null && ch !== word[i]) continue;
@@ -84,6 +97,7 @@ function tryWinding(grid: string[], word: string): boolean {
       Array.from({ length: CELLS }, (_, i) => i).filter(
         (i) => grid[i] === null || grid[i] === word[0],
       ),
+      rng,
     );
     for (const s of starts) {
       path.length = 0;
@@ -124,7 +138,7 @@ function placeStraight(grid: string[], word: string, row: number, backward: bool
   return true;
 }
 
-function countFindable(grid: string[], dictionary: Set<string>): number {
+function countFindable(grid: readonly string[], dictionary: Set<string>): number {
   const found = new Set<string>();
   const seen = new Set<number>();
   const word: string[] = [];
@@ -148,29 +162,80 @@ function countFindable(grid: string[], dictionary: Set<string>): number {
   return found.size;
 }
 
-export function generateLetters(common: string[], dictionary: Set<string>): string[][] {
+export interface Hint {
+  word: string;
+  /** Cell indices (row-major) in reading order. */
+  path: number[];
+}
+
+/**
+ * A word that is on the board and not yet found — the longest available, so a
+ * hint is worth spending. Paths are ordered, so the flash shows the direction.
+ */
+export function findHint(
+  grid: readonly string[],
+  dictionary: Set<string>,
+  found: ReadonlySet<string>,
+): Hint | null {
+  const candidates: Hint[] = [];
+  const seenWords = new Set<string>();
+  const visited = new Set<number>();
+  const path: number[] = [];
+  const dfs = (cell: number): void => {
+    if (candidates.length >= MAX_HINT_CANDIDATES) return;
+    visited.add(cell);
+    path.push(cell);
+    if (path.length >= 3) {
+      const word = path.map((i) => grid[i]).join('');
+      const key = word.toLowerCase();
+      if (!found.has(key) && dictionary.has(key) && !seenWords.has(key)) {
+        seenWords.add(key);
+        candidates.push({ word, path: [...path] });
+      }
+    }
+    if (path.length < MAX_PATH) {
+      for (const n of NEIGHBORS[cell]!) {
+        if (!visited.has(n)) dfs(n);
+      }
+    }
+    path.pop();
+    visited.delete(cell);
+  };
+  for (let i = 0; i < CELLS; i++) dfs(i);
+  if (candidates.length === 0) return null;
+
+  const longest = Math.max(...candidates.map((c) => c.word.length));
+  const best = candidates.filter((c) => c.word.length === longest);
+  return best[Math.floor(Math.random() * best.length)]!;
+}
+
+export function generateLetters(
+  common: string[],
+  dictionary: Set<string>,
+  rng: Rng = Math.random,
+): string[][] {
   let best: string[] | null = null;
   let bestCount = -1;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const grid: string[] = Array<string>(CELLS).fill(null as unknown as string);
-    const straight = pickWords(common, 2, COLS, COLS);
+    const straight = pickWords(common, 2, COLS, COLS, rng);
     const placed: string[] = [];
-    const rows = shuffle(Array.from({ length: ROWS }, (_, r) => r));
+    const rows = shuffle(Array.from({ length: ROWS }, (_, r) => r), rng);
     for (const word of straight) {
       for (const row of rows) {
-        if (placeStraight(grid, word, row, Math.random() < 0.5)) {
+        if (placeStraight(grid, word, row, rng() < 0.5)) {
           placed.push(word);
           break;
         }
       }
     }
-    const winding = pickWords(common, 4, 3, 5).filter((w) => !placed.includes(w));
+    const winding = pickWords(common, 4, 3, 5, rng).filter((w) => !placed.includes(w));
     for (const word of winding) {
-      if (tryWinding(grid, word)) placed.push(word);
+      if (tryWinding(grid, word, rng)) placed.push(word);
     }
     for (let i = 0; i < CELLS; i++) {
       if (grid[i] === null) {
-        grid[i] = FILL[Math.floor(Math.random() * FILL.length)]!;
+        grid[i] = FILL[Math.floor(rng() * FILL.length)]!;
       }
     }
     const count = countFindable(grid, dictionary);
