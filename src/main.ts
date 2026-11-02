@@ -102,7 +102,6 @@ async function boot(): Promise<void> {
   let common: string[] = [];
 
   function newGame(): void {
-    console.debug('[main] newGame, board=', !!board, 'score=', !!score);
     if (!board || !score) return;
     slideToken += 1;
     score = new Score(dictionary);
