@@ -40,10 +40,27 @@ function setPref(key: string, value: string): void {
   }
 }
 
+/** Keep the page chrome (letterbox bars, status bar) in step with the palette. */
+function applyThemeChrome(): void {
+  document.documentElement.style.background = THEME.cssBackdrop;
+  document.body.style.background = THEME.cssBackdrop;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME.cssBackdrop);
+}
+
 async function boot(): Promise<void> {
-  const themeName: ThemeName = pref('wordy.theme', 'dark') === 'light' ? 'light' : 'dark';
+  const storedTheme = pref('wordy.theme', '');
+  let themeExplicit = storedTheme === 'light' || storedTheme === 'dark';
+  const lightQuery = window.matchMedia('(prefers-color-scheme: light)');
+  const systemTheme = (): ThemeName => (lightQuery.matches ? 'light' : 'dark');
+  // Default to the device's appearance; an explicit toggle wins from then on.
+  const themeName: ThemeName = themeExplicit
+    ? storedTheme === 'light'
+      ? 'light'
+      : 'dark'
+    : systemTheme();
   const soundOn = pref('wordy.sound', '1') !== '0';
   applyPalette(paletteFor(themeName));
+  applyThemeChrome();
 
   const app = new Application();
   await app.init({
@@ -162,8 +179,7 @@ async function boot(): Promise<void> {
 
   function restyle(): void {
     app.renderer.background.color = THEME.backdrop;
-    document.body.style.background = THEME.cssBackdrop;
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME.cssBackdrop);
+    applyThemeChrome();
     hintLine.style.fill = THEME.stripDim;
     scoreboard.refreshTheme();
     strip.refreshTheme();
@@ -180,6 +196,7 @@ async function boot(): Promise<void> {
       setPref('wordy.sound', on ? '1' : '0');
     },
     onTheme: (light) => {
+      themeExplicit = true;
       const name: ThemeName = light ? 'light' : 'dark';
       applyPalette(paletteFor(name));
       setPref('wordy.theme', name);
@@ -193,6 +210,15 @@ async function boot(): Promise<void> {
   menu.setThemeLight(themeName === 'light');
   menu.setHints(hintsLeft);
   menu.button.position.set(STAGE_W - 42, SAFE_TOP + 30);
+
+  // Until the player picks a theme, keep following the device appearance live.
+  lightQuery.addEventListener('change', (event) => {
+    if (themeExplicit) return;
+    const name: ThemeName = event.matches ? 'light' : 'dark';
+    applyPalette(paletteFor(name));
+    menu.setThemeLight(name === 'light');
+    restyle();
+  });
 
   scoreboard.onWordsTap = () => {
     menu.close();
