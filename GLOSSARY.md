@@ -5,7 +5,7 @@ A finger-slide word puzzle played on a honeycomb of tiles. The prototype phase p
 ## Language
 
 **Board**:
-The full honeycomb of tiles: 6 tiles wide, 9 tiles tall.
+The full honeycomb of tiles: 5 tiles wide, 7 tiles tall.
 _Avoid_: grid, layout
 
 **Tile**:

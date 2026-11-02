@@ -1,17 +1,16 @@
 /**
- * Hand-placed letters (Round 1, Q6): real words embedded along the rows —
- * HONEY, BUZZ(ED), DIP(PED), HIVE(S), WORDY, SLIDE(R), TILES, WAX(ING), BEE(S).
+ * Hand-placed letters (Round 1, Q6; resized to 5×7 in ADR-0003). Every row is
+ * a real word — HONEY, HIVES, WAXED, WORDY, SLIDE, TILES, BEEFY — and the
+ * common prefixes (HONE, HIVE, WAX, WORD, TILE, BEE) all trace too.
  */
 export const LETTERS: readonly string[] = [
-  'HONEYS',
-  'BUZZED',
-  'DIPPED',
-  'HIVESW',
-  'WORDYA',
-  'SLIDER',
-  'TILESK',
-  'WAXING',
-  'BEESND',
+  'HONEY',
+  'HIVES',
+  'WAXED',
+  'WORDY',
+  'SLIDE',
+  'TILES',
+  'BEEFY',
 ];
 
 export function letterAt(row: number, col: number): string {

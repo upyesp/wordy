@@ -1,7 +1,7 @@
 /** Pointy-top honeycomb geometry; 6×9 offset-row board (ADR-0002). */
 
-export const ROWS = 9;
-export const COLS = 6;
+export const ROWS = 7;
+export const COLS = 5;
 
 const SQRT3 = Math.sqrt(3);
 

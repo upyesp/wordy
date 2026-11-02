@@ -9,8 +9,11 @@ import { FONT, THEME } from './theme';
 /** Strict portrait stage: letterboxed with bars on desktop, full-bleed on phones (Round 2, Q5). */
 const STAGE_W = 390;
 const STAGE_H = 844;
-const TILE_SIZE = 32;
-const BOARD_TOP_GAP = 170;
+const TILE_SIZE = 39;
+/** iOS fullscreen covers the stage top with status bar + Dynamic Island (≈59pt).
+ *  Nothing interactive or informational lives above this line (feedback round 2). */
+const SAFE_TOP = 56;
+const BOARD_TOP_GAP = 230;
 
 async function boot(): Promise<void> {
   const app = new Application();
@@ -36,10 +39,11 @@ async function boot(): Promise<void> {
     .then((t) => new Set(t.split('\n').filter((w) => w.length > 0)));
 
   const scoreboard = new Scoreboard();
+  scoreboard.view.position.set(0, SAFE_TOP);
   app.stage.addChild(scoreboard.view);
 
   const strip = new TraceStrip();
-  strip.view.position.set(STAGE_W / 2, 140);
+  strip.view.position.set(STAGE_W / 2, 190);
   app.stage.addChild(strip.view);
 
   const board = new Board(TILE_SIZE, {
