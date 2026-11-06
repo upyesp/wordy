@@ -2,6 +2,14 @@ import { Container } from 'pixi.js';
 import { COLS, ROWS, influence, tileAt, tileCenter } from './hex';
 import { Tile } from './Tile';
 
+/** A new tile joins the trace when the finger reaches this fraction of the tile
+ *  radius (centre distance, in tile sizes). The flat hex edges sit at √3/2 ≈ 0.87
+ *  and the vertices at 1.0, so 0.8 leaves a dead margin around every tile: edge
+ *  grazes and corner clips during a slide no longer register, while any pass
+ *  meaningfully over a tile still does. Touch-down is exempt — a press is
+ *  deliberate and keeps the whole hex as its target. */
+const SLIDE_JOIN_FRACTION = 0.8;
+
 export interface BoardCallbacks {
   /** A new slide began (finger pressed): the trace was just cleared. */
   onSlideStart(): void;
@@ -117,11 +125,11 @@ export class Board {
     this.inTrace.clear();
     this.hoveredKey = null;
     this.cb.onSlideStart();
-    this.updatePointer(gx, gy);
+    this.updatePointer(gx, gy, false);
   }
 
   move(gx: number, gy: number): void {
-    if (this.pressing) this.updatePointer(gx, gy);
+    if (this.pressing) this.updatePointer(gx, gy, true);
   }
 
   release(): void {
@@ -133,20 +141,29 @@ export class Board {
     }
   }
 
-  private updatePointer(gx: number, gy: number): void {
+  private updatePointer(gx: number, gy: number, sliding: boolean): void {
     const p = this.view.toLocal({ x: gx, y: gy });
     const hit = tileAt(this.tileSize, p.x, p.y);
     if (hit) {
       const key = hit.row * COLS + hit.col;
-      if (key !== this.hoveredKey) {
-        this.hoveredKey = key;
-        const tile = this.byIndex.get(key);
-        if (tile && !this.inTrace.has(tile)) {
-          this.inTrace.add(tile);
-          this.trace.push(tile);
-          tile.setSelected(true);
-          this.cb.onTileJoin(tile.letter, this.trace.length - 1);
+      // While sliding, only a convincing position joins (SLIDE_JOIN_FRACTION);
+      // hovering the dead margin keeps the trace as it is. hoverKey tracks the
+      // last accepted tile, so drifting back inside still triggers the join.
+      const c = tileCenter(hit.row, hit.col, this.tileSize);
+      const inside = !sliding || Math.hypot(p.x - c.x, p.y - c.y) <= SLIDE_JOIN_FRACTION * this.tileSize;
+      if (inside) {
+        if (key !== this.hoveredKey) {
+          this.hoveredKey = key;
+          const tile = this.byIndex.get(key);
+          if (tile && !this.inTrace.has(tile)) {
+            this.inTrace.add(tile);
+            this.trace.push(tile);
+            tile.setSelected(true);
+            this.cb.onTileJoin(tile.letter, this.trace.length - 1);
+          }
         }
+      } else {
+        this.hoveredKey = null;
       }
     } else {
       this.hoveredKey = null;
