@@ -5,7 +5,8 @@ import { FONT, THEME, lerpColor } from './theme';
  * The big scoreboard (feedback round): SCORE huge and centred, WORDS and BEST
  * flanking. WORDS doubles as the tap target for the found-words review — a
  * chevron appears once there is a word to review. The daily streak caption
- * sits in the gap under the score (ADR-0004).
+ * sits in the gap under the score (ADR-0004), with the word ration below it
+ * (ADR-0007).
  */
 export class Scoreboard {
   readonly view = new Container();
@@ -19,10 +20,13 @@ export class Scoreboard {
   private readonly wordsT: Text;
   private readonly bestT: Text;
   private readonly streakT: Text;
+  private readonly rationT: Text;
   private readonly chevron: Text;
   private readonly labels: Text[] = [];
   private lastPulseFill = -1;
   private scoreSize = 64;
+  /** Remaining words in the ration; −1 until the first board sets it. */
+  private rationLeft = -1;
 
   constructor() {
     const stat = (labelText: string, x: number): Text => {
@@ -94,6 +98,21 @@ export class Scoreboard {
     this.streakT.position.set(195, 104);
     this.view.addChild(this.streakT);
 
+    // Word ration caption (ADR-0007): "7 WORDS LEFT", ember once it runs out.
+    this.rationT = new Text({
+      text: '',
+      style: {
+        fontFamily: FONT,
+        fontSize: 10,
+        fontWeight: '700',
+        letterSpacing: 2,
+        fill: THEME.stripDim,
+      },
+    });
+    this.rationT.anchor.set(0.5);
+    this.rationT.position.set(195, 116);
+    this.view.addChild(this.rationT);
+
     // WORDS stat hit area: wider than the label so a thumb can find it.
     const wordsHit = new Container();
     wordsHit.eventMode = 'static';
@@ -121,6 +140,14 @@ export class Scoreboard {
     }
   }
 
+  /** Words still in the ration (ADR-0007); zero completes the board. */
+  setRation(left: number): void {
+    this.rationLeft = left;
+    this.rationT.text =
+      left > 0 ? `${left} WORD${left === 1 ? '' : 'S'} LEFT` : left === 0 ? 'BOARD COMPLETE' : '';
+    this.rationT.style.fill = left > 0 ? THEME.stripDim : THEME.ember;
+  }
+
   flash(): void {
     this.pulse = 1;
   }
@@ -143,6 +170,7 @@ export class Scoreboard {
     this.wordsT.style.fill = THEME.stripInk;
     this.bestT.style.fill = THEME.stripInk;
     this.streakT.style.fill = THEME.ember;
+    this.setRation(this.rationLeft);
     this.chevron.style.fill = THEME.stripDim;
     this.lastPulseFill = -1;
   }

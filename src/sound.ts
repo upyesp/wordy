@@ -55,4 +55,12 @@ export class Sound {
     this.tone(783.99, 0, 0.12, 'triangle', 0.09);
     this.tone(1046.5, 0.08, 0.16, 'triangle', 0.09);
   }
+
+  /** Rising resolution chime as the results card appears (ADR-0007). */
+  complete(): void {
+    this.tone(523.25, 0, 0.2, 'triangle', 0.1);
+    this.tone(659.25, 0.1, 0.2, 'triangle', 0.1);
+    this.tone(783.99, 0.2, 0.2, 'triangle', 0.1);
+    this.tone(1046.5, 0.3, 0.34, 'triangle', 0.12);
+  }
 }

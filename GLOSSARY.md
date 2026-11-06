@@ -52,6 +52,10 @@ _Avoid_: points (in prose), total
 The highest Score reached in any session on this device; remembered between visits.
 _Avoid_: high score, record
 
+**Ration**:
+The ten new Words a Board grants per session; spending the last one completes the board. Invalid traces and repeats are free — only a newly scored Word spends the Ration.
+_Avoid_: quota, budget, limit
+
 **Daily board**:
 The arrangement dealt from a seed fixed by the local calendar day, so it is the same board for everyone playing on that day.
 _Avoid_: puzzle, challenge, level

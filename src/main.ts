@@ -4,6 +4,7 @@ import { dailySeed, hasPlayedToday, markPlayed, mulberry32, streakNow } from './
 import { boardBounds } from './hex';
 import { findHint, generateLetters } from './letters';
 import { Menu } from './Menu';
+import { Results } from './Results';
 import { Scoreboard } from './Scoreboard';
 import { Score } from './score';
 import { Sound } from './sound';
@@ -21,6 +22,9 @@ const SAFE_TOP = 56;
 const STRIP_Y = 190;
 const BOARD_TOP_GAP = 230;
 const HINTS_PER_BOARD = 3;
+/** Every board grants ten new words (GLOSSARY: Ration); spending the last one
+ *  completes the board (ADR-0007). Invalid traces and repeats are free. */
+const WORDS_PER_BOARD = 10;
 /** Menu fade-out time (plus margin); a hint waits so its reveal is not hidden. */
 const MENU_CLOSE_MS = 240;
 
@@ -115,6 +119,7 @@ async function boot(): Promise<void> {
   app.stage.addChild(hintLine);
 
   const wordsPanel = new WordsPanel();
+  const results = new Results({ onNewBoard: () => newGame() });
 
   const sound = new Sound();
   sound.muted = !soundOn;
@@ -128,6 +133,9 @@ async function boot(): Promise<void> {
   let dailyMode = true;
   let streak = streakNow();
   let streakRecorded = hasPlayedToday();
+  let wordsLeft = WORDS_PER_BOARD;
+  let boardComplete = false;
+  let bestAtStart = 0;
 
   /** Deal a board (daily or random) and start a fresh session on it. */
   function startBoard(letters: string[][], daily: boolean): void {
@@ -135,11 +143,16 @@ async function boot(): Promise<void> {
     slideToken += 1;
     dailyMode = daily;
     score = new Score(dictionary);
+    bestAtStart = score.best;
+    boardComplete = false;
+    wordsLeft = WORDS_PER_BOARD;
     board.newGame(letters);
     strip.reset();
     scoreboard.resetScore();
     scoreboard.update(0, 0, score.best);
     scoreboard.setStreak(streak, dailyMode);
+    scoreboard.setRation(wordsLeft);
+    results.close();
     wordsPanel.close();
     hintsLeft = HINTS_PER_BOARD;
     menu.setHints(hintsLeft);
@@ -163,7 +176,7 @@ async function boot(): Promise<void> {
   }
 
   function revealHint(): void {
-    if (!board || !score || hintsLeft <= 0) return;
+    if (!board || !score || hintsLeft <= 0 || boardComplete) return;
     const hint = findHint(board.gridLetters(), dictionary, score.foundSet);
     if (!hint) {
       sound.fail();
@@ -185,6 +198,7 @@ async function boot(): Promise<void> {
     strip.refreshTheme();
     board?.refreshTheme();
     wordsPanel.refreshTheme();
+    results.refreshTheme();
     menu.refreshTheme();
   }
 
@@ -241,9 +255,30 @@ async function boot(): Promise<void> {
       scoreboard.setStreak(streak, dailyMode);
       scoreboard.flash();
       sound.success();
+      wordsLeft -= 1;
+      scoreboard.setRation(wordsLeft);
+      if (wordsLeft === 0) completeBoard(score);
     } else if (result.status === 'invalid' || result.status === 'short') {
       sound.fail();
     }
+  }
+
+  /** The ration is spent: stop slides and raise the results card (ADR-0007). */
+  function completeBoard(final: Score): void {
+    boardComplete = true;
+    const token = slideToken;
+    const snap = {
+      score: final.score,
+      best: final.best,
+      newBest: final.score > bestAtStart,
+      streak,
+      daily: dailyMode,
+    };
+    window.setTimeout(() => {
+      if (token !== slideToken) return; // a new board began meanwhile
+      results.show(snap);
+      sound.complete();
+    }, 950);
   }
 
   let activePointer: number | null = null;
@@ -253,6 +288,7 @@ async function boot(): Promise<void> {
     sound.resume();
     if (activePointer !== null) return; // single finger only (Round 1)
     if (e.target !== app.stage) return; // menu chrome never starts a slide
+    if (boardComplete) return; // the ration is spent — the board is done (ADR-0007)
     activePointer = e.pointerId;
     board?.press(e.global.x, e.global.y);
   });
@@ -291,6 +327,7 @@ async function boot(): Promise<void> {
     scoreboard.step(dt);
     menu.step(dt);
     wordsPanel.step(dt);
+    results.step(dt);
   });
 
   // Word lists land, then today's board begins (ADR-0004).
@@ -298,8 +335,10 @@ async function boot(): Promise<void> {
   dictionary = dictSet;
   common = commonList;
   score = new Score(dictionary);
+  bestAtStart = score.best;
   scoreboard.update(0, 0, score.best);
   scoreboard.setStreak(streak, dailyMode);
+  scoreboard.setRation(wordsLeft);
   menu.setHints(hintsLeft);
 
   board = new Board(TILE_SIZE, generateLetters(common, dictionary, mulberry32(dailySeed())), {
@@ -321,8 +360,8 @@ async function boot(): Promise<void> {
     BOARD_TOP_GAP + (STAGE_H - BOARD_TOP_GAP - bounds.height) / 2 - bounds.offsetY,
   );
   app.stage.addChild(board.view);
-  // Overlays sit above the board; the menu sits above everything.
-  app.stage.addChild(wordsPanel.view, menu.button, menu.layer);
+  // Overlays sit above the board; results above those; the menu above everything.
+  app.stage.addChild(wordsPanel.view, results.view, menu.button, menu.layer);
 
   if (import.meta.env.PROD && 'serviceWorker' in navigator) {
     navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {
@@ -347,6 +386,8 @@ async function boot(): Promise<void> {
     playedToday: streakRecorded,
     words: score?.foundWords.length ?? 0,
     panel: wordsPanel.isOpen,
+    wordsLeft,
+    complete: boardComplete,
   });
 }
 
