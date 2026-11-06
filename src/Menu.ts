@@ -297,7 +297,7 @@ export class Menu {
     g.roundRect(0, 0, SWITCH_W, SWITCH_H, SWITCH_H / 2);
     g.fill({ color: lerpColor(THEME.toggleOff, THEME.ember, t) });
     g.circle(SWITCH_H / 2 + t * (SWITCH_W - SWITCH_H), SWITCH_H / 2, KNOB);
-    g.fill({ color: 0xf7f1e3 });
+    g.fill({ color: 0xf4f7ff }); // neutral knob — sits on ember in both themes
   }
 
   private applyIconAlphas(): void {

@@ -15,38 +15,42 @@ export interface Palette {
   toggleOff: number;
 }
 
+// Dark: neon on deep indigo — electric cyan tiles, hot magenta accents,
+// cool ice-white text. The LIGHT palette stays warm paper.
 const DARK: Palette = {
-  backdrop: 0x181209,
-  cssBackdrop: '#181209',
-  tile: 0xf0b24a,
-  tilePressed: 0xb97e20,
-  ember: 0xff8a3c,
-  edgeLight: 0xffdf9e,
-  edgeDark: 0x8a5a14,
-  ink: 0x35220a,
+  backdrop: 0x0b0b16,
+  cssBackdrop: '#0b0b16',
+  tile: 0x36e2ff,
+  tilePressed: 0x1899b8,
+  ember: 0xff2fb9,
+  edgeLight: 0xbdfaff,
+  edgeDark: 0x0e5c70,
+  ink: 0x06222b,
   shadow: 0x000000,
-  stripInk: 0xe9dcc3,
-  stripDim: 0x77664e,
-  panel: 0x241b10,
-  panelBorder: 0x4a3a22,
-  toggleOff: 0x4a3a22,
+  stripInk: 0xeef6ff,
+  stripDim: 0x6a7392,
+  panel: 0x151527,
+  panelBorder: 0x2e2e52,
+  toggleOff: 0x2e2e52,
 };
 
+// Light: the same neon hues as DARK, deepened so they hold contrast on pale
+// ice — electric cyan tiles, deep magenta accents, cool slate text.
 const LIGHT: Palette = {
-  backdrop: 0xf3ead6,
-  cssBackdrop: '#f3ead6',
-  tile: 0xf0b24a,
-  tilePressed: 0xc08428,
-  ember: 0xe07020,
-  edgeLight: 0xfff3cd,
-  edgeDark: 0xc09040,
-  ink: 0x2a1a08,
-  shadow: 0x5a4520,
-  stripInk: 0x4a3a26,
-  stripDim: 0xa59477,
-  panel: 0xfffaf0,
-  panelBorder: 0xd8c8a8,
-  toggleOff: 0xd8c8a8,
+  backdrop: 0xebf3f9,
+  cssBackdrop: '#ebf3f9',
+  tile: 0x17c8e8,
+  tilePressed: 0x0a8fae,
+  ember: 0xc90e93,
+  edgeLight: 0xd9f7ff,
+  edgeDark: 0x0a7f9c,
+  ink: 0x05242e,
+  shadow: 0x16333e,
+  stripInk: 0x1c2438,
+  stripDim: 0x5d6a85,
+  panel: 0xf9fcff,
+  panelBorder: 0xc9d6e4,
+  toggleOff: 0xc9d6e4,
 };
 
 export type ThemeName = 'dark' | 'light';

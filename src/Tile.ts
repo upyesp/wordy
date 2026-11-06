@@ -125,7 +125,7 @@ export class Tile {
     this.shadowG.scale.set(1.05 - 0.03 * dip);
     this.shadowG.fill({ color: THEME.shadow, alpha: 0.18 + 0.08 * dip });
 
-    // Face: uniform dark rim, radial amber centre, no edge bias.
+    // Face: uniform dark rim, radial highlight centre, no edge bias.
     let face = lerpColor(THEME.tile, THEME.tilePressed, 0.55 * dip);
     face = lerpColor(face, THEME.ember, 0.5 * sel);
     const rim = lerpColor(THEME.edgeDark, face, 0.25);
