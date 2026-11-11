@@ -4,7 +4,7 @@ import { Spring } from './spring';
 import { FONT, THEME, lerpColor } from './theme';
 
 const DIP_SCALE = 0.1;
-const LETTER_FONT_SIZE_RATIO = 0.82;
+const LETTER_FONT_SIZE_RATIO = 1.08;
 
 /**
  * One honeycomb tile. The resting surface is deliberately direction-neutral
