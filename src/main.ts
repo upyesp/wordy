@@ -409,6 +409,23 @@ async function boot(): Promise<void> {
     });
   }
 
+  // `?diag=1` prints the renderer and the WebKit audio state on the page — the
+  // only way to read them on an iPhone, where there is no console.
+  if (new URLSearchParams(window.location.search).has('diag')) {
+    const box = document.createElement('div');
+    box.style.cssText =
+      'position:fixed;top:6px;left:6px;z-index:99;padding:4px 7px;border-radius:6px;' +
+      'font:11px/1.5 ui-monospace,monospace;color:#bdfaff;background:rgba(0,0,0,0.65);' +
+      'pointer-events:none;white-space:pre';
+    document.body.appendChild(box);
+    const paint = (): void => {
+      box.textContent =
+        `backend ${backend}\nsound ${sound.muted ? 'muted' : 'on'} · ctx ${sound.state}`;
+    };
+    paint();
+    window.setInterval(paint, 500);
+  }
+
   // Debug/e2e hooks (tiny, harmless in production).
   (window as unknown as Record<string, unknown>).__wordyNewGame = newGame;
   (window as unknown as Record<string, unknown>).__wordyDaily = dailyGame;
@@ -421,6 +438,7 @@ async function boot(): Promise<void> {
     ...menu.debugState,
     theme: document.body.style.background,
     backend,
+    sound: { muted: sound.muted, state: sound.state },
     hints: hintsLeft,
     daily: dailyMode,
     streak,

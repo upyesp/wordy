@@ -7,12 +7,37 @@ const PENTATONIC = [523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.7, 1318.5]
 export class Sound {
   muted = false;
   private ctx: AudioContext | null = null;
+  private failedResumes = 0;
+
+  /** WebKit's AudioContext state, for on-device diagnosis (`?diag=1`). */
+  get state(): string {
+    return this.ctx?.state ?? 'none';
+  }
 
   /** Call from a user-gesture handler so the context is allowed to start. */
   resume(): void {
     try {
-      this.ctx ??= new AudioContext();
-      if (this.ctx.state === 'suspended') void this.ctx.resume();
+      // A closed context can never run again; a fresh one is the only recovery.
+      if (!this.ctx || this.ctx.state === 'closed') {
+        this.ctx = new AudioContext();
+        this.failedResumes = 0;
+      }
+      // Not just 'suspended': WebKit also parks a context in 'interrupted' after
+      // another app or a call takes the audio session, and that state never
+      // clears on its own. Resume from every gesture and heal if it keeps failing.
+      if (this.ctx.state !== 'running') {
+        this.ctx.resume().then(
+          () => {
+            this.failedResumes = 0;
+          },
+          () => {
+            // Rejected: drop the context so the next gesture builds a clean one
+            // (WebKit will not revive some interrupted contexts at all).
+            this.failedResumes += 1;
+            if (this.failedResumes >= 2) this.ctx = null;
+          },
+        );
+      }
     } catch {
       this.ctx = null; // no audio available; stay silent
     }
