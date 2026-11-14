@@ -66,16 +66,36 @@ async function boot(): Promise<void> {
   applyPalette(paletteFor(themeName));
   applyThemeChrome();
 
-  const app = new Application();
-  await app.init({
-    width: STAGE_W,
-    height: STAGE_H,
-    background: THEME.backdrop,
-    preference: 'webgpu',
-    antialias: true,
-    resolution: window.devicePixelRatio,
-    autoDensity: true,
-  });
+  let app = new Application();
+  try {
+    await app.init({
+      width: STAGE_W,
+      height: STAGE_H,
+      background: THEME.backdrop,
+      preference: 'webgpu',
+      antialias: true,
+      resolution: window.devicePixelRatio,
+      autoDensity: true,
+    });
+  } catch {
+    // Some WebKit builds (Chrome on iOS) advertise WebGPU but fail during
+    // device/canvas setup after Pixi's detection passed. Fall back to plain
+    // WebGL — more than enough for this scene.
+    try {
+      app.destroy();
+    } catch {
+      /* the failed renderer was never initialised fully */
+    }
+    app = new Application();
+    await app.init({
+      width: STAGE_W,
+      height: STAGE_H,
+      background: THEME.backdrop,
+      antialias: true,
+      resolution: window.devicePixelRatio,
+      autoDensity: true,
+    });
+  }
   // The fixed logical stage is ours to letterbox — pixi's window-following
   // resize must never stretch it (it fights fit() when phone UI chrome resizes).
   (app as unknown as { resizeTo: unknown }).resizeTo = null;
@@ -391,4 +411,16 @@ async function boot(): Promise<void> {
   });
 }
 
-void boot();
+boot().catch((err: unknown) => {
+  // Never black-screen silently again: surface any boot failure on the page
+  // (the pre-paint body is near-black, which looks like "the site is broken").
+  const box = document.createElement('pre');
+  box.style.cssText =
+    'position:fixed;left:12px;right:12px;bottom:12px;max-height:40vh;overflow:auto;' +
+    'margin:0;padding:10px;font:12px/1.4 ui-monospace,monospace;white-space:pre-wrap;' +
+    'color:#ffd7ef;background:#1b0416;border:1px solid #5c1e4a;border-radius:8px;z-index:99;';
+  box.textContent =
+    'wordy failed to start\n' +
+    (err instanceof Error ? `${err.name}: ${err.message}\n${err.stack ?? ''}` : String(err));
+  document.body.appendChild(box);
+});
