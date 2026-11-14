@@ -67,30 +67,36 @@ async function boot(): Promise<void> {
   applyThemeChrome();
 
   let app = new Application();
+  let backend = 'webgl';
   try {
+    // WebGL, deliberately — NOT WebGPU. WebGPU on iOS WebKit is broken for our
+    // shape of app: canvases flicker (WebKit bug 301627) and repeated resolution
+    // changes leak Metal memory until WebKit force-reloads the page (bug 312563,
+    // where a WebGL build of the same app is explicitly unaffected). This scene
+    // is trivial for WebGL; there is nothing to gain from WebGPU.
     await app.init({
       width: STAGE_W,
       height: STAGE_H,
       background: THEME.backdrop,
-      preference: 'webgpu',
+      preference: 'webgl',
       antialias: true,
       resolution: window.devicePixelRatio,
       autoDensity: true,
     });
   } catch {
-    // Some WebKit builds (Chrome on iOS) advertise WebGPU but fail during
-    // device/canvas setup after Pixi's detection passed. Fall back to plain
-    // WebGL — more than enough for this scene.
+    // WebGL unavailable (blocked or context creation failed): try WebGPU.
     try {
       app.destroy();
     } catch {
       /* the failed renderer was never initialised fully */
     }
     app = new Application();
+    backend = 'webgpu';
     await app.init({
       width: STAGE_W,
       height: STAGE_H,
       background: THEME.backdrop,
+      preference: 'webgpu',
       antialias: true,
       resolution: window.devicePixelRatio,
       autoDensity: true,
@@ -326,14 +332,28 @@ async function boot(): Promise<void> {
   app.stage.on('pointerupoutside', end);
   app.stage.on('pointercancel', end);
 
+  // Phone chrome (URL bar, toolbars, keyboard) fires resize storms. Re-allocating
+  // the drawing buffer on every event churns GPU memory — on iOS WebKit that is
+  // what force-reloads a WebGPU page (WebKit bug 312563) — so only touch the
+  // renderer when the effective resolution or letterbox actually changes.
+  let lastRes = -1;
+  let lastCssW = -1;
+  let lastCssH = -1;
   const fit = (): void => {
     const scale = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
     const res = Math.min(Math.max(window.devicePixelRatio * scale, 1), 3);
+    const cssW = Math.floor(STAGE_W * scale);
+    const cssH = Math.floor(STAGE_H * scale);
+    const resChanged = Math.abs(res - lastRes) > 0.01;
+    if (!resChanged && cssW === lastCssW && cssH === lastCssH) return;
     // resize first — autoDensity rewrites the canvas style to logical size, so
     // the letterbox style must be (re)asserted after it (feedback round 3).
-    app.renderer.resize(STAGE_W, STAGE_H, res);
-    app.canvas.style.width = `${Math.floor(STAGE_W * scale)}px`;
-    app.canvas.style.height = `${Math.floor(STAGE_H * scale)}px`;
+    if (resChanged) app.renderer.resize(STAGE_W, STAGE_H, res);
+    app.canvas.style.width = `${cssW}px`;
+    app.canvas.style.height = `${cssH}px`;
+    lastRes = res;
+    lastCssW = cssW;
+    lastCssH = cssH;
   };
   window.addEventListener('resize', fit);
   window.addEventListener('orientationchange', fit);
@@ -400,6 +420,7 @@ async function boot(): Promise<void> {
   (window as unknown as Record<string, unknown>).__wordyDebug = () => ({
     ...menu.debugState,
     theme: document.body.style.background,
+    backend,
     hints: hintsLeft,
     daily: dailyMode,
     streak,
