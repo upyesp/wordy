@@ -17,6 +17,10 @@ const INK = [0x06, 0x22, 0x2b];
 
 const SS = 3; // supersampling factor
 const RIM_FRAC = 0.02; // rim width as a fraction of the canvas
+// Thin keyline around the W, drawn OUTSIDE the ink stroke (the ink keeps its
+// full thickness). Colour is the rim colour lifted toward white.
+const W_OUT_FRAC = 0.012; // keyline width as a fraction of the canvas
+const W_OUT = [0xe1, 0xfc, 0xff];
 // W box relative to the hexagon; stroke thickness relative to the W height.
 const W_W = 0.52;
 const W_H = 0.38;
@@ -63,6 +67,7 @@ function render(S, r) {
   const wW = W_W * hexW;
   const wH = W_H * hexH;
   const wT = (W_T * wH) / 2;
+  const wOut = S * W_OUT_FRAC;
   const pts = W_PTS.map(([x, y]) => [(x - 0.5) * wW, (y - 0.5) * wH]);
   const segs = [];
   for (let i = 0; i < pts.length - 1; i++) segs.push([pts[i], pts[i + 1]]);
@@ -76,12 +81,15 @@ function render(S, r) {
       let c = BG;
       if (inHex(u, v, r - rimW)) c = FACE;
       else if (inHex(u, v, r)) c = RIM;
+      // Keyline sits on the outside edge of the ink stroke: dist <= wT stays
+      // full-thickness ink, the band beyond it gets the light lining.
+      let dW = Infinity;
       for (const [[ax, ay], [bx, by]] of segs) {
-        if (distSeg(u, v, ax, ay, bx, by) <= wT) {
-          c = INK;
-          break;
-        }
+        const d = distSeg(u, v, ax, ay, bx, by);
+        if (d < dW) dW = d;
       }
+      if (dW <= wT) c = INK;
+      else if (dW <= wT + wOut) c = W_OUT;
       const o = (j * N + i) * 3;
       img[o] = c[0];
       img[o + 1] = c[1];
